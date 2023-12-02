@@ -46,7 +46,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define DBM_REG_HISTORY_0 0x14
 #define DBM_REG_HISTORY_99 0x77
 
-TwoWire dbmeter = TwoWire(0);
+TwoWire dbmeterWire(0);
 
 // Function to read a register from the meter
 uint8_t dbmeter_readreg(TwoWire *dev, uint8_t regaddr) {
@@ -109,18 +109,18 @@ void setup() {
 // main code, to run repeatedly
 void loop() {
     // Initialize I2C at 10kHz
-    dbmeter.begin(I2C_SDA, I2C_SCL, 10000);
+    dbmeterWire.begin(I2C_SDA, I2C_SCL, 10000);
 
     // Read version register
-    uint8_t version = dbmeter_readreg(&dbmeter, DBM_REG_VERSION);
+    uint8_t version = dbmeter_readreg(&dbmeterWire, DBM_REG_VERSION);
     Serial.printf("Version = 0x%02X\r\n", version);
 
     // Read ID registers
     uint8_t id[4];
-    id[0] = dbmeter_readreg(&dbmeter, DBM_REG_ID3);
-    id[1] = dbmeter_readreg(&dbmeter, DBM_REG_ID2);
-    id[2] = dbmeter_readreg(&dbmeter, DBM_REG_ID1);
-    id[3] = dbmeter_readreg(&dbmeter, DBM_REG_ID0);
+    id[0] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID3);
+    id[1] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID2);
+    id[2] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID1);
+    id[3] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID0);
     Serial.printf("Unique ID = %02X %02X %02X %02X\r\n", id[3], id[2], id[1],
                   id[0]);
 
@@ -128,16 +128,25 @@ void loop() {
     String DBMjson;
     while (1) {
         // Read decibel, min and max
-        db = dbmeter_readreg(&dbmeter, DBM_REG_DECIBEL);
+        db = dbmeter_readreg(&dbmeterWire, DBM_REG_DECIBEL);
         if (db == 255) continue;
-        dbmin = dbmeter_readreg(&dbmeter, DBM_REG_MIN);
-        dbmax = dbmeter_readreg(&dbmeter, DBM_REG_MAX);
+        dbmin = dbmeter_readreg(&dbmeterWire, DBM_REG_MIN);
+        dbmax = dbmeter_readreg(&dbmeterWire, DBM_REG_MAX);
         Serial.printf("dB reading = %03d \t [MIN: %03d \tMAX: %03d] \r\n", db,
                       dbmin, dbmax);
 
         // Assemble JSON with dB SPL reading
-        DBMjson = "{\"db\": " + String(db) + "}";
+        DBMjson = String(db);
         Serial.println("JSON: \n" + DBMjson);
+
+        // Update OLED display with dB reading
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.setTextSize(2);  // Increase text size for better visibility
+        display.setTextColor(WHITE);
+        display.print("dB: ");
+        display.print(db);
+        display.display();
 
         // Make a POST request with the data to ThingSpeak
         if (WiFi.status() == WL_CONNECTED) {
@@ -171,15 +180,3 @@ void loop() {
         delay(5000);
     }
 }
-
-// display dB data on OLED display
-// for (int x = 5; x < 114; x = x + 6) {  // draw scale
-//     display.drawLine(x, 32, x, 27, WHITE);
-// }
-// display.drawRoundRect(0, 32, 120, 20, 6,
-//                       WHITE);     // draw outline of bar graph
-// int r = map(db, 0, 120, 1, 120);  // set bar graph for width of screen
-// display.fillRoundRect(1, 33, r, 18, 6,
-//                       WHITE);  // draw bar graph with a width of r
-// display.display();             // show all that we just wrote & drew
-// display.clearDisplay();        // clear the display
