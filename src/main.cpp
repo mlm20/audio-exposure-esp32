@@ -77,18 +77,38 @@ void setup() {
     //// OLED screen setup
     // initialize the OLED object
     u8g2.begin();
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_NokiaSmallBold_tf);
 
+    // Print title
+    u8g2.setCursor(0, 15);
+    u8g2.print("Decibel Meter");
+    u8g2.sendBuffer();
+
+    //// Setup wifi
     // make wifi connection
     delay(6000);
     WiFi.begin(ssid, pass);
 
     // write in serial once wifi is connected
     while (WiFi.status() != WL_CONNECTED) {
-        delay(5000);
+        delay(1000);
         Serial.print(".");
     }
     Serial.println("");
     Serial.println("WiFi connected");
+
+    // print wifi connected message on OLED
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_NokiaSmallBold_tf);
+    u8g2.setCursor(0, 15);
+    u8g2.print("Decibel Meter");
+
+    u8g2.setFont(u8g2_font_NokiaSmallPlain_tf);
+    u8g2.setCursor(0, 40);
+    u8g2.print("WiFi connected");
+    u8g2.sendBuffer();
+    delay(2000);
 
     // Initialize I2C for dB meter
     dbmeterWire.begin(I2C_SDA_DBM, I2C_SCL_DBM, 10000);
@@ -125,6 +145,17 @@ void loop() {
         DBMjson = String(db);
         Serial.println("JSON: \n" + DBMjson);
 
+        // print dB level on OLED
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_NokiaSmallBold_tf);
+        u8g2.setCursor(0, 15);
+        u8g2.print("Decibel Meter");
+
+        u8g2.setFont(u8g2_font_NokiaSmallPlain_tf);
+        u8g2.setCursor(0, 40);
+        u8g2.print("Current level: " + String(db) + " dB");
+        u8g2.sendBuffer();
+
         // Make a POST request with the data to ThingSpeak
         if (WiFi.status() == WL_CONNECTED) {
             HTTPClient http;
@@ -152,14 +183,6 @@ void loop() {
             Serial.println("Something wrong with WiFi?");
         }
     }
-
-    // Draw to the OLED display
-
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.setCursor(0, 15);
-    u8g2.print("Hello world!");
-    u8g2.sendBuffer();
-
+    
     delay(5000);
 }
