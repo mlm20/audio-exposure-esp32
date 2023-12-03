@@ -2,6 +2,7 @@
 // setup
 
 //// libraries
+#include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
@@ -9,8 +10,8 @@
 
 //// dB meter setup
 // SDA and SCL pins
-#define I2C_SDA 5
-#define I2C_SCL 18
+#define I2C_SDA_DBM 5
+#define I2C_SCL_DBM 18
 
 // I2C address
 #define DBM_ADDR 0x48
@@ -34,7 +35,7 @@
 #define DBM_REG_HISTORY_0 0x14
 #define DBM_REG_HISTORY_99 0x77
 
-TwoWire dbmeter = TwoWire(0);
+TwoWire dbmeterWire = TwoWire(1);  // Use a separate I2C bus for dB meter
 
 // Function to read a register from the meter
 uint8_t dbmeter_readreg(TwoWire *dev, uint8_t regaddr) {
@@ -45,6 +46,13 @@ uint8_t dbmeter_readreg(TwoWire *dev, uint8_t regaddr) {
     delay(10);
     return dev->read();
 }
+
+//// OLED screen initialisation
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1  // Reset pin
+#define SCREEN_ADDRESS 0x3C
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //// passwords and API keys
 // ThingSpeak API key
@@ -60,6 +68,24 @@ WiFiClient client;
 void setup() {
     Serial.begin(115200);
 
+    //// OLED screen setup
+    // initialize the OLED object
+    if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        for (;;)
+            ;  // Don't proceed, loop forever
+    }
+
+    // Clear the buffer.
+    display.clearDisplay();
+
+    // Display trail Text
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 28);
+    display.println("Hello world!");
+    display.display();
+
     // make wifi connection
     delay(6000);
     WiFi.begin(ssid, pass);
@@ -71,35 +97,35 @@ void setup() {
     }
     Serial.println("");
     Serial.println("WiFi connected");
+
+    // Initialize I2C for dB meter
+    dbmeterWire.begin(I2C_SDA_DBM, I2C_SCL_DBM, 10000);
 }
 
 // #############################################################################
 // main code, to run repeatedly
 void loop() {
-    // Initialize I2C at 10kHz
-    dbmeter.begin(I2C_SDA, I2C_SCL, 10000);
-
     // Read version register
-    uint8_t version = dbmeter_readreg(&dbmeter, DBM_REG_VERSION);
+    uint8_t version = dbmeter_readreg(&dbmeterWire, DBM_REG_VERSION);
     Serial.printf("Version = 0x%02X\r\n", version);
 
     // Read ID registers
     uint8_t id[4];
-    id[0] = dbmeter_readreg(&dbmeter, DBM_REG_ID3);
-    id[1] = dbmeter_readreg(&dbmeter, DBM_REG_ID2);
-    id[2] = dbmeter_readreg(&dbmeter, DBM_REG_ID1);
-    id[3] = dbmeter_readreg(&dbmeter, DBM_REG_ID0);
+    id[0] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID3);
+    id[1] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID2);
+    id[2] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID1);
+    id[3] = dbmeter_readreg(&dbmeterWire, DBM_REG_ID0);
     Serial.printf("Unique ID = %02X %02X %02X %02X\r\n", id[3], id[2], id[1],
                   id[0]);
 
     uint8_t db, dbmin, dbmax;
     String DBMjson;
-    while (1) {
-        // Read decibel, min and max
-        db = dbmeter_readreg(&dbmeter, DBM_REG_DECIBEL);
-        if (db == 255) continue;
-        dbmin = dbmeter_readreg(&dbmeter, DBM_REG_MIN);
-        dbmax = dbmeter_readreg(&dbmeter, DBM_REG_MAX);
+
+    // Read decibel, min, and max
+    db = dbmeter_readreg(&dbmeterWire, DBM_REG_DECIBEL);
+    if (db != 255) {
+        dbmin = dbmeter_readreg(&dbmeterWire, DBM_REG_MIN);
+        dbmax = dbmeter_readreg(&dbmeterWire, DBM_REG_MAX);
         Serial.printf("dB reading = %03d \t [MIN: %03d \tMAX: %03d] \r\n", db,
                       dbmin, dbmax);
 
@@ -117,8 +143,7 @@ void loop() {
 
             http.begin(thingspeakEndpoint);
 
-            int httpResponseCode =
-                http.GET();  // Send the actual GET request for ThingSpeak
+            int httpResponseCode = http.GET();
 
             if (httpResponseCode == 200) {
                 // Successful response from ThingSpeak
@@ -134,8 +159,8 @@ void loop() {
         } else {
             Serial.println("Something wrong with WiFi?");
         }
-
-        // Wait for 5 seconds before posting another reading
-        delay(5000);
     }
+
+    // Wait for 5 seconds before posting another reading
+    delay(5000);
 }
