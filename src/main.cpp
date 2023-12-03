@@ -2,9 +2,9 @@
 // setup
 
 //// libraries
-#include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 #include <HTTPClient.h>
+#include <U8g2lib.h>
 #include <WiFi.h>
 #include <Wire.h>
 
@@ -48,11 +48,17 @@ uint8_t dbmeter_readreg(TwoWire *dev, uint8_t regaddr) {
 }
 
 //// OLED screen initialisation
+#define I2C_SDA_OLED 21
+#define I2C_SCL_OLED 22
+
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1  // Reset pin
 #define SCREEN_ADDRESS 0x3C
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+U8G2_SH1106_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/I2C_SCL_OLED,
+                                        /* data=*/I2C_SDA_OLED,
+                                        /* reset=*/U8X8_PIN_NONE);
 
 //// passwords and API keys
 // ThingSpeak API key
@@ -70,21 +76,7 @@ void setup() {
 
     //// OLED screen setup
     // initialize the OLED object
-    if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        Serial.println(F("SSD1306 allocation failed"));
-        for (;;)
-            ;  // Don't proceed, loop forever
-    }
-
-    // Clear the buffer.
-    display.clearDisplay();
-
-    // Display trail Text
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(0, 28);
-    display.println("Hello world!");
-    display.display();
+    u8g2.begin();
 
     // make wifi connection
     delay(6000);
@@ -161,6 +153,13 @@ void loop() {
         }
     }
 
-    // Wait for 5 seconds before posting another reading
+    // Draw to the OLED display
+
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setCursor(0, 15);
+    u8g2.print("Hello world!");
+    u8g2.sendBuffer();
+
     delay(5000);
 }
